@@ -20,6 +20,66 @@ td		{ font-family: Verdana, Arial; font-size: 10pt; border: 1px solid black; ver
 <h4>Introduction</h4>
 
 <p>
+Doxygen is a tool for generating documentation from source code and it currently
+handles many languages either natively or through add-on filters. This script
+is one such filter that transforms T-SQL into C-like code so that doxygen can
+then parse it natively.
+</p><p>
+While this means that you can benefit from the automated generation of
+documentation it does mean that you have to mentally translate a 'struct' back
+into a 'table' and reverse the type and member/variable names in declarations.
+</p><p>
+NB: There is a separate project underway that is designed to allow Doxygen to
+natively handle SQL and format it in more natural fashion.
+</p>
+
+<a name="Installation"></a>
+<h4>Installation</h4>
+
+<p>
+The only file you need from the package is <code>sql2doxygen.ps1</code>. Copy
+it to somewhere suitable such as your Doxygen installation or the SQL project.
+</p><p>
+In the doxygen configuration file for your project you'll find a section about
+options for input files. Near the bottom of that section you'll find an entry
+called <code>INPUT_FILTER</code>, set this to where the <code>sql2doxygen.ps1</code>
+script lives.
+</p><pre>
+#---------------------------------------------------------------------------
+# configuration options related to the input files
+#---------------------------------------------------------------------------
+INPUT        = .
+. . .
+INPUT_FILTER = "PowerShell.exe -File C:\Path\To\sql2doxygen.ps1"
+. . .
+</pre><p>
+NB: The surrounding quotes are required or you'll get a cryptic error from
+Doxygen about not being able to find it.
+</p>
+
+<a name="Exmaple"></a>
+<h4>Example Output</h4>
+
+<p>
+In the package you'll find a subfolder called <code>Example</code> that contains
+a Doxygen project file and a few .sql files. Assuming the Doxygen .exe is on your
+path and the location is writable you can generate the example output like so:-
+</p><pre>
+C:\sql2doxygen\Example> doxygen.exe Doxygen.cfg
+</pre><p>
+You should see a new folder appear called <code>Dox</code>. Open <code>index.html</code>
+to see the results.
+</p><p>
+NB: The example Doxygen.cfg file uses a relative path to reference the sql2doxygen
+filter script and so you must ensure the current working directory (CWD) is set
+to the <code>Example</code> folder.
+</p>
+
+<a name="Formatting"></a>
+<h4>SQL Source Formatting</h4>
+
+<p>
+TODO... The example covers some of this in its introduction page.
 </p>
 
 <hr>
@@ -41,7 +101,7 @@ Email: <a href="mailto://gort@cix.co.uk">gort@cix.co.uk</a><br>
 Web: <a href="http://www.cix.co.uk/~gort">www.cix.co.uk/~gort</a><br>
 </p><p>
 Chris Oldwood<br>
-22nd June 2011<br>
+14th September 2011<br>
 </p>
 
 </body>
