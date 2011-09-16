@@ -43,6 +43,7 @@ $lines = get-content $args[0]
 $inComment = $false
 $inCreateTable = $false
 $inCreateFunction = $false
+$inCreateProcedure = $false
 
 # For all lines...
 foreach ($line in $lines)
@@ -52,7 +53,7 @@ foreach ($line in $lines)
 	{
 		write-output $line
 	}
-	# If currently parsing a comment, continue until end of comment found.
+	# If currently parsing a comment, continue until end found.
 	elseif ($inComment -eq $true)
 	{
 		write-output $line
@@ -69,48 +70,48 @@ foreach ($line in $lines)
 
 		if ($line -notmatch '\*/')
 		{
-		  $inComment = $true
-        }
+			$inComment = $true
+		}
 	}
-    # Part of sql-style comment?
+	# Part of sql-style comment?
 	elseif ($line -match '^--')
-    {
-        if ($line -match '^----+')
-        {
-		  $line = $line -replace '-','/'
-        }
-    
+	{
+		if ($line -match '^----+')
+		{
+			$line = $line -replace '-','/'
+		}
+
 		$line = $line -replace '--!','//!'
 		$line = $line -replace '---','///'
 		$line = $line -replace '--','//'
 
 		write-output $line
-    }    
-	# If currently parsing a table, continue until end of table found.
+	}
+	# If currently parsing a table, continue until end found.
 	elseif ($inCreateTable -eq $true)
 	{
+		if ($line -match '^(?<indent>\s+)(?<column>\w+)\s+(?<fulltype>[\w.]+)')
+		{
+			$type = $matches.fulltype -replace '^\w+\.',''
+			$indent = $matches.indent
+			$column = $matches.column
+
+			$comment = ''
+
+			if ($line -match '(?<comment>(/\*.+\*/|-.+)$)')
+			{
+				$comment = $matches.comment
+			}
+
+			$line = $indent + $type + ' ' + $column + '; ' + $comment
+		}
+
 		$line = $line -replace '^\(', '{'
 		$line = $line -replace '^\);?', '};'
 
 		$line = $line -replace '--!','//!'
 		$line = $line -replace '---','///'
 		$line = $line -replace '--','//'
-
-		if ($line -match '^(?<indent>\s+)(?<column>\w+)\s+(?<fulltype>[\w.]+)')
-		{
-			$type = $matches.fulltype -replace '^\w+\.',''
-            $indent = $matches.indent
-            $column = $matches.column
-
-            $comment = ''
-
-            if ($line -match '(?<comment>/\*.+\*/$)')
-            {
-                $comment = $matches.comment
-            }
-
-			$line = $indent + $type + ' ' + $column + '; ' + $comment
-		}
 
 		write-output $line
 
@@ -130,7 +131,7 @@ foreach ($line in $lines)
 
 		$inCreateTable = $true
 	}
-	# If currently parsing a function, continue until end of function found.
+	# If currently parsing a function, continue until end found.
 	elseif ($inCreateFunction -eq $true)
 	{
 		$line = $line -replace '^begin', '{'
@@ -141,7 +142,7 @@ foreach ($line in $lines)
 		if ($line -match '^\($')
 		{
 			$inArgsList = $true
-            $argsList = @()
+			$argsList = @()
 		}
 
 		if ($line -match '^\)$')
@@ -155,45 +156,49 @@ foreach ($line in $lines)
 			$returnType = $returnType -replace '\(','['
 			$returnType = $returnType -replace '\)',']'
 
-            write-output ($returnType + ' ' + $name)
-            write-output '('
+			write-output ($returnType + ' ' + $name)
+			write-output '('
 
-            $firstArg = $true
-            
-            foreach ($arg in $argsList)
-            {
-                if ($firstArg -ne $true)
-                {
-                    $arg = ', ' + $arg
-                }
-                
-                write-output $arg
+			$firstArg = $true
 
-                $firstArg = $false
-            }
+			foreach ($arg in $argsList)
+			{
+				if ($firstArg -ne $true)
+				{
+					$arg = ', ' + $arg
+				}
 
-            write-output ')'
+				write-output $arg
+
+				$firstArg = $false
+			}
+
+			write-output ')'
 		}
-        elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.]+)') )
+		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.]+)') )
 		{
 			$type = $matches.fulltype -replace '^\w+\.',''
-            $indent = $matches.indent
-            $param = $matches.param
+			$indent = $matches.indent
+			$param = $matches.param
 
-            $comment = ''
+			$comment = ''
 
-            if ($line -match '(?<comment>/\*.+\*/$)')
-            {
-                $comment = $matches.comment
-            }
+			if ($line -match '(?<comment>(/\*.+\*/|--.+)$)')
+			{
+				$comment = $matches.comment
+
+				$comment = $comment -replace '--!','//!'
+				$comment = $comment -replace '---','///'
+				$comment = $comment -replace '--','//'
+			}
 
 			$argsList += $indent + $type + ' ' + $param + ' ' + $comment
 		}
-        elseif ($returnType -ne $null)
-        {
-		  write-output $line
-        }
-        
+		elseif ($returnType -ne $null)
+		{
+			write-output $line
+		}
+
 		if ($line -match '}')
 		{
 			$inCreateFunction = $false
@@ -220,11 +225,88 @@ foreach ($line in $lines)
 			$parens = $matches.parens
 		}
 
-        if ($returnType -ne $null)
-        {
-            write-output ($returnType + ' ' + $name + $parens)
-        }
-        
+		if ($returnType -ne $null)
+		{
+			write-output ($returnType + ' ' + $name + $parens)
+		}
+
 		$inCreateFunction = $true
+	}
+	# If currently parsing a procedure, continue until end found.
+	elseif ($inCreateProcedure -eq $true)
+	{
+		$line = $line -replace '^as', '{'
+		$line = $line -replace '^go', '}'
+
+		if ( ($line -match '^{$') -and ($name -ne $null) )
+		{
+			write-output ('void' + ' ' + $name + '()')
+			write-output '{'
+		}
+		elseif ($line -match '^\($')
+		{
+			$inArgsList = $true
+			$argsList = @()
+
+			write-output ('void' + ' ' + $name)
+			write-output '('
+
+			$name = $null
+		}
+		elseif ($line -match '^\)$')
+		{
+			$inArgsList = $false
+
+			$firstArg = $true
+
+			foreach ($arg in $argsList)
+			{
+				if ($firstArg -ne $true)
+				{
+					$arg = ', ' + $arg
+				}
+
+				write-output $arg
+
+				$firstArg = $false
+			}
+
+			write-output ')'
+		}
+		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.]+)') )
+		{
+			$type = $matches.fulltype -replace '^\w+\.',''
+			$indent = $matches.indent
+			$param = $matches.param
+
+			$comment = ''
+
+			if ($line -match '(?<comment>(/\*.+\*/|--.+)$)')
+			{
+				$comment = $matches.comment
+
+				$comment = $comment -replace '--!','//!'
+				$comment = $comment -replace '---','///'
+				$comment = $comment -replace '--','//'
+			}
+
+			$argsList += $indent + $type + ' ' + $param + ' ' + $comment
+		}
+		else
+		{
+			write-output $line
+		}
+
+		if ($line -match '}')
+		{
+			$inCreateProcedure = $false
+		}
+	}
+	# Start of procedure definition?
+	elseif ($line -match '^\s*create\s+procedure\s+(?<fullname>[\w.]+)')
+	{
+		$name = $matches.fullname -replace '^\w+\.',''
+
+		$inCreateProcedure = $true
 	}
 }
