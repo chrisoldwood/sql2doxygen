@@ -18,7 +18,7 @@ go
 ** This table definition uses the C-style comment.
 **/
 
-create table myschema.MyTable
+create table MyTable
 (
 	/** This column definition uses the C-style comment. */
 	MyColumn myschema.MyType not null primary key clustered,
@@ -63,12 +63,36 @@ create table MyFinalTable
 )
 go
 
+/**
+** A table definition that has a schema and []'s in the names.
+**/
+
+create table [dbo].[BracketsTable]
+(
+	[BracketsColumn] [BracketsType]		--!< A column with []'s in the name.
+)
+go
+
 /*!
  * A function that takes no arguments.
  * NB: The signature is written on a single line.
  */
 
-create function myschema.MyNoArgsFunction() returns varchar(10)
+create function MyNoArgsFunction() returns varchar(10)
+as
+begin
+	return '42';
+end
+go
+
+/*!
+ * A function that has a schema and []'s in the name.
+ */
+
+create function [dbo].[BracketsFunction] 
+(
+)
+	returns [BracketType]
 as
 begin
 	return '42';
@@ -79,7 +103,7 @@ go
  * A function that takes no arguments and spans multiple lines.
  */
 
-create function myschema.MyOtherNoArgsFunction
+create function MyOtherNoArgsFunction
 (
 )
 	returns varchar(20)
@@ -94,7 +118,7 @@ go
  * specified on a separate line.
  */
 
-create function myschema.OneMoreNoArgsFunction()
+create function OneMoreNoArgsFunction()
 	returns varchar(20)
 as
 begin
@@ -106,7 +130,7 @@ go
  * A function that takes one or more arguments.
  */
 
-create function myschema.MyFunction
+create function MyFunction
 (
 	@value1	tinyint,		--!< The 1st argument.
 	@value2	smalldatetime	/*!< The 2nd argument. */
@@ -127,7 +151,19 @@ go
  * A procedure that takes no arguments.
  */
 
-create procedure myschema.MyNoArgProcedure
+create procedure MyNoArgProcedure
+as
+	set nocount on;
+go
+
+/*!
+ * A procedure that has a schema and []'s in the name.
+ */
+
+create procedure [dbo].[BracketsProcedure]
+(
+	@aParam [BracketType]		--!< Parameter type with []'s
+)
 as
 	set nocount on;
 go
@@ -136,7 +172,7 @@ go
  * A procedure that takes no arguments.
  */
 
-create procedure myschema.MyOneArgProcedure
+create procedure MyOneArgProcedure
 (
 	@anArgument varchar(10)		--!< The procedures' sole argument
 )

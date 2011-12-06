@@ -57,12 +57,33 @@ struct MyFinalTable
 	smalldatetime MyFinalColumn; 
 };
 
+/**
+** A table definition that has a schema and []'s in the names.
+**/
+
+struct dbo::BracketsTable
+{
+	BracketsType BracketsColumn; //!< A column with []'s in the name.
+};
+
 /*!
  * A function that takes no arguments.
  * NB: The signature is written on a single line.
  */
 
 varchar[10] MyNoArgsFunction() 
+
+{
+	return '42';
+}
+
+/*!
+ * A function that has a schema and []'s in the name.
+ */
+
+BracketType dbo::BracketsFunction
+(
+)
 
 {
 	return '42';
@@ -117,6 +138,18 @@ varchar[10] MyFunction
  */
 
 void MyNoArgProcedure()
+{
+	set nocount on;
+}
+
+/*!
+ * A procedure that has a schema and []'s in the name.
+ */
+
+void dbo::BracketsProcedure
+(
+	BracketType @aParam //!< Parameter type with []'s
+)
 {
 	set nocount on;
 }

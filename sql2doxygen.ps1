@@ -2,7 +2,7 @@
 # \file		sql2doxygen.ps1
 # \brief	Convert the SQL file into something Doxygen can handle.
 # \author	Chris Oldwood (gort@cix.co.uk | www.cix.co.uk/~gort)
-# \version	0.1
+# \version	0.2
 #
 # This is a Doxygen filter that takes a .SQL file (T-SQL) and transforms it into
 # C-like code so that Doxygen can then parse it.
@@ -17,24 +17,30 @@ trap
 	exit 1
 }
 
+# Write a line of output terminated with a CR/LF
+function write-line([string] $line)
+{
+    write-host -nonewline ("{0}`r`n" -f $line)
+}
+
 # Validate command line
 if ( ($args.count -ne 1) -or ($args[0] -eq '--help') )
 {
 	if ($args[0] -eq '--help')
 	{
-		write-output "sql2doxygen v0.1"
-		write-output "(C) Chris Oldwood 2011 (gort@cix.co.uk)"
+		write-line "sql2doxygen v0.2"
+		write-line "(C) Chris Oldwood 2011 (gort@cix.co.uk)"
 	}
 	else
 	{
-		write-output "ERROR: Invalid command line"
+		write-line "ERROR: Invalid command line"
 	}
 
-	write-output ""
-	write-output "USAGE: sql2doxygen.ps1 <file.sql>"
-	write-output ""
-	write-output "Doxygen configuration:-"
-	write-output "INPUT_FILTER = C:\Path\To\sql2doxygen.cmd"
+	write-line ""
+	write-line "USAGE: sql2doxygen.ps1 <file.sql>"
+	write-line ""
+	write-line "Doxygen configuration:-"
+	write-line "INPUT_FILTER = `"PowerShell.exe -File \Path\To\sql2doxygen.ps1`""
 	exit 1
 }
 
@@ -51,12 +57,12 @@ foreach ($line in $lines)
 	# Keep empty lines
 	if ($line -match '^\s*$')
 	{
-		write-output $line
+		write-line $line
 	}
 	# If currently parsing a comment, continue until end found.
 	elseif ($inComment -eq $true)
 	{
-		write-output $line
+		write-line $line
 
 		if ($line -match '\*/')
 		{
@@ -66,7 +72,7 @@ foreach ($line in $lines)
 	# Start of c-style comment?
 	elseif ($line -match '^/\*[*!]')
 	{
-		write-output $line
+		write-line $line
 
 		if ($line -notmatch '\*/')
 		{
@@ -85,16 +91,21 @@ foreach ($line in $lines)
 		$line = $line -replace '---','///'
 		$line = $line -replace '--','//'
 
-		write-output $line
+		write-line $line
 	}
 	# If currently parsing a table, continue until end found.
 	elseif ($inCreateTable -eq $true)
 	{
-		if ($line -match '^(?<indent>\s+)(?<column>\w+)\s+(?<fulltype>[\w.]+)')
+		if ($line -match '^(?<indent>\s+)(?<column>[\w\[\]]+)\s+(?<fulltype>[\w.\[\]]+)')
 		{
-			$type = $matches.fulltype -replace '^\w+\.',''
+			$type = $matches.fulltype
+            $type = $type -replace '^\w+\.',''
+			$type = $type -replace '\[|\]',''
+
 			$indent = $matches.indent
+
 			$column = $matches.column
+			$column = $column -replace '\[|\]',''
 
 			$comment = ''
 
@@ -113,7 +124,7 @@ foreach ($line in $lines)
 		$line = $line -replace '---','///'
 		$line = $line -replace '--','//'
 
-		write-output $line
+		write-line $line
 
 		if ($line -match '};')
 		{
@@ -121,13 +132,15 @@ foreach ($line in $lines)
 		}
 	}
 	# Start of table definition?
-	elseif ($line -match '^\s*create\s+table\s+(?<fullname>[\w.]+)')
+	elseif ($line -match '^\s*create\s+table\s+(?<fullname>[\w.\[\]]+)')
 	{
-		$name = $matches.fullname -replace '^\w+\.',''
+        $name = $matches.fullname
+		$name = $name -replace '\[|\]',''
+		$name = $name -replace '\.','::'
 
 		$line = 'struct ' + $name
 
-		write-output $line
+		write-line $line
 
 		$inCreateTable = $true
 	}
@@ -150,14 +163,15 @@ foreach ($line in $lines)
 			$inArgsList = $false
 		}
 
-		if ($line -match '.*returns\s+(?<type>[\w.()]+)$')
+		if ($line -match '.*returns\s+(?<type>[\w.\[\]()]+)$')
 		{
 			$returnType = $matches.type -replace '^\w+\.',''
+            $returnType = $returnType -replace '\[|\]',''
 			$returnType = $returnType -replace '\(','['
 			$returnType = $returnType -replace '\)',']'
 
-			write-output ($returnType + ' ' + $name)
-			write-output '('
+			write-line ($returnType + ' ' + $name)
+			write-line '('
 
 			$firstArg = $true
 
@@ -168,14 +182,14 @@ foreach ($line in $lines)
 					$arg = ', ' + $arg
 				}
 
-				write-output $arg
+				write-line $arg
 
 				$firstArg = $false
 			}
 
-			write-output ')'
+			write-line ')'
 		}
-		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.]+)') )
+		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.\[\]]+)') )
 		{
 			$type = $matches.fulltype -replace '^\w+\.',''
 			$indent = $matches.indent
@@ -196,7 +210,7 @@ foreach ($line in $lines)
 		}
 		elseif ($returnType -ne $null)
 		{
-			write-output $line
+			write-line $line
 		}
 
 		if ($line -match '}')
@@ -205,29 +219,32 @@ foreach ($line in $lines)
 		}
 	}
 	# Start of function definition?
-	elseif ($line -match '^\s*create\s+function\s+(?<fullname>[\w.]+)')
+	elseif ($line -match '^\s*create\s+function\s+(?<fullname>[\w.\[\]]+)')
 	{
-		$name = $matches.fullname -replace '^\w+\.',''
+		$name = $matches.fullname
+        $name = $name -replace '\[|\]',''
+		$name = $name -replace '\.','::'
 
 		$returnType = $null
 
-		if ($line -match '.*returns\s+(?<type>[\w.()]+)$')
+		if ($line -match '.*returns\s+(?<type>[\w.\[\]()]+)$')
 		{
 			$returnType = $matches.type -replace '^\w+\.',''
+            $returnType = $returnType -replace '\[|\]',''
 			$returnType = $returnType -replace '\(','['
 			$returnType = $returnType -replace '\)',']'
 		}
 
 		$parens = ''
 
-		if ($line -match 'function\s+[\w.]+\s*(?<parens>[()\s]+)')
+		if ($line -match 'function\s+[\w.\[\]]+\s*(?<parens>[()\s]+)')
 		{
 			$parens = $matches.parens
 		}
 
 		if ($returnType -ne $null)
 		{
-			write-output ($returnType + ' ' + $name + $parens)
+			write-line ($returnType + ' ' + $name + $parens)
 		}
 
 		$inCreateFunction = $true
@@ -240,16 +257,16 @@ foreach ($line in $lines)
 
 		if ( ($line -match '^{$') -and ($name -ne $null) )
 		{
-			write-output ('void' + ' ' + $name + '()')
-			write-output '{'
+			write-line ('void' + ' ' + $name + '()')
+			write-line '{'
 		}
 		elseif ($line -match '^\($')
 		{
 			$inArgsList = $true
 			$argsList = @()
 
-			write-output ('void' + ' ' + $name)
-			write-output '('
+			write-line ('void' + ' ' + $name)
+			write-line '('
 
 			$name = $null
 		}
@@ -266,16 +283,19 @@ foreach ($line in $lines)
 					$arg = ', ' + $arg
 				}
 
-				write-output $arg
+				write-line $arg
 
 				$firstArg = $false
 			}
 
-			write-output ')'
+			write-line ')'
 		}
-		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.]+)') )
+		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.\[\]]+)') )
 		{
-			$type = $matches.fulltype -replace '^\w+\.',''
+			$type = $matches.fulltype
+            $type = $type -replace '^\w+\.',''
+			$type = $type -replace '\[|\]',''
+
 			$indent = $matches.indent
 			$param = $matches.param
 
@@ -294,7 +314,7 @@ foreach ($line in $lines)
 		}
 		else
 		{
-			write-output $line
+			write-line $line
 		}
 
 		if ($line -match '}')
@@ -303,9 +323,11 @@ foreach ($line in $lines)
 		}
 	}
 	# Start of procedure definition?
-	elseif ($line -match '^\s*create\s+procedure\s+(?<fullname>[\w.]+)')
+	elseif ($line -match '^\s*create\s+procedure\s+(?<fullname>[\w.\[\]]+)')
 	{
-		$name = $matches.fullname -replace '^\w+\.',''
+        $name = $matches.fullname
+		$name = $name -replace '\[|\]',''
+		$name = $name -replace '\.','::'
 
 		$inCreateProcedure = $true
 	}
