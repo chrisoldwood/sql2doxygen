@@ -1,1 +1,3 @@
-- Transform schema to namespace
+- Transform create schema to namespace
+
+- Place objects inside namespaces to avoid "Internal inconsistency: scope for class..."
