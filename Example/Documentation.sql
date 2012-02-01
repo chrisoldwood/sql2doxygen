@@ -9,11 +9,11 @@
 **
 ** \section Introduction
 ** This output was generated from the example .sql scripts. It also acts as
-** my test data and so will give you a definitive answer to what constructs
+** my test data and so will give you a definitive answer as to what constructs
 ** are supported.
 **
 ** \section Limitations
-** The sql2doygen script is a very dumb line based parser and so it expects
+** The sql2doygen script is a very dumb line-based parser and so it expects
 ** most key definitions to appear on one line, e.g. don't split the keywords
 ** CREATE & (TABLE|FUNCTION|PROCEDURE) across multiple lines. The name of the
 ** object must also appear on the same line as the CREATE keyword:-
@@ -24,7 +24,7 @@
 **
 ** This is probably not overly restrictive for tables, but when it comes to
 ** functions SQL and C put the return type at opposite ends of the function
-** declaration and so parsing them is much harder. Currently the only tyles
+** declaration and so parsing them is much harder. Currently the only styles
 ** supported are:-
 **
 ** \code
