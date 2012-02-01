@@ -5,10 +5,15 @@
 # \version	0.2
 #
 # This is a Doxygen filter that takes a .SQL file (T-SQL) and transforms it into
-# C-like code so that Doxygen can then parse it.
+# C-like code so that Doxygen can then parse it. The current conversion assumes
+# that the Doxygen output will be optimised for C and not Java.
 ################################################################################
 
-# Configure error handling
+################################################################################
+# Configure error handling.
+
+set-strictmode -version Latest
+
 $ErrorActionPreference = 'stop'
 
 trap
@@ -17,13 +22,20 @@ trap
 	exit 1
 }
 
-# Write a line of output terminated with a CR/LF
+################################################################################
+# Write a line of output terminated with a CR/LF. The built-in write-host
+# cmdlet does not play nicely with stdout redirection (it only appends a CR).
+# The write-output cmdlet also fails with redirection as text is wrapped at the
+# width of the parent console window so we have to do it manually.
+
 function write-line([string] $line)
 {
     write-host -nonewline ("{0}`r`n" -f $line)
 }
 
-# Validate command line
+################################################################################
+# Validate the command line.
+
 if ( ($args.count -ne 1) -or ($args[0] -eq '--help') )
 {
 	if ($args[0] -eq '--help')
@@ -44,291 +56,382 @@ if ( ($args.count -ne 1) -or ($args[0] -eq '--help') )
 	exit 1
 }
 
-$lines = get-content $args[0]
+################################################################################
+# Regular expressions used to parse the code.
 
-$inComment = $false
-$inCreateTable = $false
-$inCreateFunction = $false
-$inCreateProcedure = $false
+$name_pattern = '[\w.\[\]]+'                                # [schema].[name]
+$indent_re = '^(?<indent>\s*)'                              # Leading whitespace
+$column_name_re = "(?<column_name>$name_pattern)"           # Identifier
+$type_name_re = "(?<type_name>[\w.\[\]()]+)"                # Identifier
+$parameter_name_re = "(?<parameter_name>@$name_pattern)"    # @Identifier
+$comment_re = '(?<comment>/\*.+\*/\s*$|--.+$|\s*$)'         # /* ... */ or -- ... or none
+$create_table_re = 'create\s+table'                         # create table
+$table_name_re = "(?<table_name>$name_pattern)"             # Identifier
+$create_function_re = 'create\s+function'                   # create function
+$function_name_re = "(?<function_name>$name_pattern)"       # Identifier
+$create_procedure_re = 'create\s+procedure'                 # create procedure
+$procedure_name_re = "(?<procedure_name>$name_pattern)"     # Identifier
 
-# For all lines...
-foreach ($line in $lines)
+################################################################################
+# Detect a line consisting of nothing but whitespace.
+
+function is-blank-line($line)
 {
-	# Keep empty lines
-	if ($line -match '^\s*$')
-	{
+    if ($line -match '^\s*$')
+    {
+        return $true
+    }
+
+    return $false
+}
+
+################################################################################
+# Convert a single-line SQL-style comment into the C-style equivalent.
+
+function transform-sql-comment($line)
+{
+	$line = $line -replace '--!','//!'
+	$line = $line -replace '---','///'
+	$line = $line -replace '--','//'
+    
+    return $line
+}
+
+################################################################################
+# Transform the SQL identifier into one compatible with the C++ language.
+
+function transform-identifier($identifier)
+{
+	$identifier = $identifier -replace '\[|\]',''
+	$identifier = $identifier -replace '\.','::'
+    
+    return $identifier
+}
+
+################################################################################
+# Transform the SQL type name into one compatible with the C++ language. Types
+# are similar to identifiers in format but you have parametersied variants, such
+# as varchar(10).
+
+function transform-type($type)
+{
+	$type = transform-identifier $type
+	$type = $type -replace '\(','['
+	$type = $type -replace '\)',']'
+    
+    return $type
+}
+
+################################################################################
+# Handle C-style comments. These start with /* and end with */. The doxygen
+# variants starts with /** or /*!.
+
+function is-c-style-comment($line)
+{
+    if ($line -match '^/\*[*!]')
+    {
+        return $true
+    }
+
+    return $false
+}
+
+function write-c-style-comment($enumerator)
+{
+    $line = $enumerator.value.current
+
+	write-line $line
+
+    # Single comment?
+	if ($line -match '\*/')
+    {
+        return
+    }
+
+    # Multi-line comment.
+    while ($enumerator.value.movenext())
+    {
+        $line = $enumerator.value.current
+
 		write-line $line
-	}
-	# If currently parsing a comment, continue until end found.
-	elseif ($inComment -eq $true)
+        
+        if ($line -match '\*/')
+        {
+            return
+        }
+    }
+}
+
+################################################################################
+# Handle SQL-style comments. These start with -- or for the doxygen variants --!
+# or ---. These are transformed into the single-line // C-style comment.
+
+function is-sql-style-comment($line)
+{
+    if ($line -match '^--')
+    {
+        return $true
+    }
+
+    return $false
+}
+
+function write-sql-style-comment($line)
+{
+	if ($line -match '^----+')
 	{
-		write-line $line
-
-		if ($line -match '\*/')
-		{
-			$inComment = $false
-		}
+		$line = $line -replace '-','/'
 	}
-	# Start of c-style comment?
-	elseif ($line -match '^/\*[*!]')
-	{
-		write-line $line
 
-		if ($line -notmatch '\*/')
+	$line = transform-sql-comment $line
+
+	write-line $line
+}
+
+################################################################################
+# Handle table definitions. This assumes that the "create table" keywords and
+# the table name are all on a single line. The column definitions also must
+# not span lines.
+
+function is-table-definition($line)
+{
+    if ($line -match "$indent_re$create_table_re")
+    {
+        return $true
+    }
+
+    return $false
+}
+
+function write-table-definition($enumerator)
+{
+	if ($line -notmatch "$indent_re$create_table_re\s+$table_name_re")
+    {
+        return
+    }
+    
+	$line = 'struct ' + (transform-identifier $matches.table_name)
+
+	write-line $line
+
+    while ($enumerator.value.movenext())
+    {
+        $line = $enumerator.value.current
+
+        # Handle column definitions
+		if ($line -match "$indent_re$column_name_re\s+$type_name_re[\s,\w]*$comment_re")
 		{
-			$inComment = $true
-		}
-	}
-	# Part of sql-style comment?
-	elseif ($line -match '^--')
-	{
-		if ($line -match '^----+')
-		{
-			$line = $line -replace '-','/'
-		}
-
-		$line = $line -replace '--!','//!'
-		$line = $line -replace '---','///'
-		$line = $line -replace '--','//'
-
-		write-line $line
-	}
-	# If currently parsing a table, continue until end found.
-	elseif ($inCreateTable -eq $true)
-	{
-		if ($line -match '^(?<indent>\s+)(?<column>[\w\[\]]+)\s+(?<fulltype>[\w.\[\]]+)')
-		{
-			$type = $matches.fulltype
-            $type = $type -replace '^\w+\.',''
-			$type = $type -replace '\[|\]',''
-
-			$indent = $matches.indent
-
-			$column = $matches.column
-			$column = $column -replace '\[|\]',''
-
-			$comment = ''
-
-			if ($line -match '(?<comment>(/\*.+\*/|-.+)$)')
-			{
-				$comment = $matches.comment
-			}
+			$indent  = $matches.indent
+			$column  = transform-identifier $matches.column_name
+			$type    = transform-type $matches.type_name
+			$comment = $matches.comment
 
 			$line = $indent + $type + ' ' + $column + '; ' + $comment
 		}
 
+        # Transform table body delimiters
 		$line = $line -replace '^\(', '{'
 		$line = $line -replace '^\);?', '};'
 
-		$line = $line -replace '--!','//!'
-		$line = $line -replace '---','///'
-		$line = $line -replace '--','//'
+        $line = transform-sql-comment $line
 
 		write-line $line
 
+        # End of definition?
 		if ($line -match '};')
 		{
-			$inCreateTable = $false
+			return
 		}
-	}
-	# Start of table definition?
-	elseif ($line -match '^\s*create\s+table\s+(?<fullname>[\w.\[\]]+)')
-	{
-        $name = $matches.fullname
-		$name = $name -replace '\[|\]',''
-		$name = $name -replace '\.','::'
+    }
+}
 
-		$line = 'struct ' + $name
+################################################################################
+# Handle the set of function/procedure parameters.
 
-		write-line $line
+function write-parameters($enumerator)
+{
+    $separator = '';
 
-		$inCreateTable = $true
-	}
-	# If currently parsing a function, continue until end found.
-	elseif ($inCreateFunction -eq $true)
-	{
-		$line = $line -replace '^begin', '{'
-		$line = $line -replace '^end;?', '}'
+    while ($enumerator.value.movenext())
+    {
+        $line = $enumerator.value.current
 
-		$line = $line -replace '^as$', ''
-
-		if ($line -match '^\($')
+		if ($line -match "$indent_re$parameter_name_re\s+$type_name_re[\s,]*$comment_re")
 		{
-			$inArgsList = $true
-			$argsList = @()
+			$indent  = $matches.indent
+			$param   = transform-identifier $matches.parameter_name
+			$type    = transform-type $matches.type_name
+			$comment = transform-sql-comment $matches.comment
+
+			$line = $indent + $separator + $type + ' ' + $param + ' ' + $comment
+            
+            if ($separator -eq '')
+            {
+                $separator = ','
+            }
 		}
 
 		if ($line -match '^\)$')
 		{
-			$inArgsList = $false
+            return
 		}
 
-		if ($line -match '.*returns\s+(?<type>[\w.\[\]()]+)$')
-		{
-			$returnType = $matches.type -replace '^\w+\.',''
-            $returnType = $returnType -replace '\[|\]',''
-			$returnType = $returnType -replace '\(','['
-			$returnType = $returnType -replace '\)',']'
+		write-output $line
+    }
+}
 
-			write-line ($returnType + ' ' + $name)
-			write-line '('
+################################################################################
+# Handle user-defined function and stored procedure definitions.
 
-			$firstArg = $true
+function is-function-definition($line)
+{
+    if ($line -match "$indent_re$create_function_re")
+    {
+        return $true
+    }
 
-			foreach ($arg in $argsList)
-			{
-				if ($firstArg -ne $true)
-				{
-					$arg = ', ' + $arg
-				}
+    return $false
+}
 
-				write-line $arg
+function is-procedure-definition($line)
+{
+    if ($line -match "$indent_re$create_procedure_re")
+    {
+        return $true
+    }
 
-				$firstArg = $false
-			}
+    return $false
+}
 
-			write-line ')'
-		}
-		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.\[\]]+)') )
-		{
-			$type = $matches.fulltype -replace '^\w+\.',''
-			$indent = $matches.indent
-			$param = $matches.param
+$function = 'function'
+$procedure = 'procedure'
 
-			$comment = ''
-
-			if ($line -match '(?<comment>(/\*.+\*/|--.+)$)')
-			{
-				$comment = $matches.comment
-
-				$comment = $comment -replace '--!','//!'
-				$comment = $comment -replace '---','///'
-				$comment = $comment -replace '--','//'
-			}
-
-			$argsList += $indent + $type + ' ' + $param + ' ' + $comment
-		}
-		elseif ($returnType -ne $null)
-		{
-			write-line $line
-		}
-
-		if ($line -match '}')
-		{
-			$inCreateFunction = $false
-		}
-	}
-	# Start of function definition?
-	elseif ($line -match '^\s*create\s+function\s+(?<fullname>[\w.\[\]]+)')
+function write-fn_or_proc-definition($enumerator, $fn_or_proc)
+{
+    if ($fn_or_proc -eq $function)
 	{
-		$name = $matches.fullname
-        $name = $name -replace '\[|\]',''
-		$name = $name -replace '\.','::'
+        if ($line -notmatch "$indent_re$create_function_re\s+$function_name_re")
+        {
+            return
+        }
 
-		$returnType = $null
+        $name = transform-identifier $matches.function_name
 
-		if ($line -match '.*returns\s+(?<type>[\w.\[\]()]+)$')
+        $returnType = ''
+
+        # Return type specified with function name?
+	    if ($line -match ".*returns\s+$type_name_re$")
+        {
+            $returnType = transform-type $matches.type_name
+        }
+    }
+    elseif ($fn_or_proc -eq $procedure)
+    {
+	    if ($line -notmatch "$indent_re$create_procedure_re\s+$procedure_name_re")
+	    {
+            return
+        }
+
+        $name = transform-identifier $matches.procedure_name
+
+        $returnType = 'void'
+    }
+
+    $argsList = $null
+
+    while ($enumerator.value.movenext())
+    {
+        $line = $enumerator.value.current
+
+        # transform body delimiters
+        if ($fn_or_proc -eq $function)
+	    {
+            $line = $line -replace '^begin', '{'
+		    $line = $line -replace '^end;?', '}'
+        }
+        elseif ($fn_or_proc -eq $procedure)
+        {
+            $line = $line -replace '^as', '{'
+            $line = $line -replace '^go', '}'
+        }
+
+        # Write signature if start of body
+		if ($line -match '^{$')
 		{
-			$returnType = $matches.type -replace '^\w+\.',''
-            $returnType = $returnType -replace '\[|\]',''
-			$returnType = $returnType -replace '\(','['
-			$returnType = $returnType -replace '\)',']'
-		}
+            if ($argsList -eq $null)
+            {
+                write-line ($returnType + ' ' + $name + '()')
+            }
+            else
+            {
+                write-line ($returnType + ' ' + $name)
+                write-line '('
+                $argsList | foreach { write-line $_ }
+                write-line ')'
+            }
 
-		$parens = ''
-
-		if ($line -match 'function\s+[\w.\[\]]+\s*(?<parens>[()\s]+)')
-		{
-			$parens = $matches.parens
-		}
-
-		if ($returnType -ne $null)
-		{
-			write-line ($returnType + ' ' + $name + $parens)
-		}
-
-		$inCreateFunction = $true
-	}
-	# If currently parsing a procedure, continue until end found.
-	elseif ($inCreateProcedure -eq $true)
-	{
-		$line = $line -replace '^as', '{'
-		$line = $line -replace '^go', '}'
-
-		if ( ($line -match '^{$') -and ($name -ne $null) )
-		{
-			write-line ('void' + ' ' + $name + '()')
 			write-line '{'
-		}
+        }
+        # Handle argument list
 		elseif ($line -match '^\($')
 		{
-			$inArgsList = $true
-			$argsList = @()
-
-			write-line ('void' + ' ' + $name)
-			write-line '('
-
-			$name = $null
+            $argsList = write-parameters $enumerator
 		}
-		elseif ($line -match '^\)$')
+        elseif ($line -match '^as$')
+        {
+            # Discard
+        }
+        # Return type specified after function name/arguments?
+        elseif ($line -match ".*returns\s+$type_name_re$")
 		{
-			$inArgsList = $false
-
-			$firstArg = $true
-
-			foreach ($arg in $argsList)
-			{
-				if ($firstArg -ne $true)
-				{
-					$arg = ', ' + $arg
-				}
-
-				write-line $arg
-
-				$firstArg = $false
-			}
-
-			write-line ')'
+			$returnType = transform-type $matches.type_name
 		}
-		elseif ( ($inArgsList -eq $true) -and ($line -match '^(?<indent>\s+)(?<param>@\w+)\s+(?<fulltype>[\w.\[\]]+)') )
-		{
-			$type = $matches.fulltype
-            $type = $type -replace '^\w+\.',''
-			$type = $type -replace '\[|\]',''
-
-			$indent = $matches.indent
-			$param = $matches.param
-
-			$comment = ''
-
-			if ($line -match '(?<comment>(/\*.+\*/|--.+)$)')
-			{
-				$comment = $matches.comment
-
-				$comment = $comment -replace '--!','//!'
-				$comment = $comment -replace '---','///'
-				$comment = $comment -replace '--','//'
-			}
-
-			$argsList += $indent + $type + ' ' + $param + ' ' + $comment
-		}
-		else
+        # Buffer until return type seen
+		elseif ($returnType -ne '')
 		{
 			write-line $line
 		}
 
+        # End of definition?
 		if ($line -match '}')
 		{
-			$inCreateProcedure = $false
+			return
 		}
 	}
-	# Start of procedure definition?
-	elseif ($line -match '^\s*create\s+procedure\s+(?<fullname>[\w.\[\]]+)')
-	{
-        $name = $matches.fullname
-		$name = $name -replace '\[|\]',''
-		$name = $name -replace '\.','::'
+}
 
-		$inCreateProcedure = $true
+################################################################################
+# Main parsing loop.
+
+$lines = get-content $args[0]
+$enumerator = $lines.getenumerator()
+
+while ($enumerator.movenext())
+{
+    $line = $enumerator.current
+
+	if (is-blank-line $line -eq $true)
+    {
+        write-line $line
+    }
+    elseif (is-c-style-comment $line -eq $true)
+	{
+        write-c-style-comment $(get-variable -name enumerator)
 	}
+	elseif (is-sql-style-comment $line -eq $true)
+	{
+        write-sql-style-comment $line
+	}
+    elseif (is-table-definition $line -eq $true)
+    {
+        write-table-definition $(get-variable -name enumerator)
+    }
+    elseif (is-function-definition $line -eq $true)
+    {
+        write-fn_or_proc-definition $(get-variable -name enumerator) $function
+    }
+    elseif (is-procedure-definition $line -eq $true)
+    {
+        write-fn_or_proc-definition $(get-variable -name enumerator) $procedure
+    }
 }

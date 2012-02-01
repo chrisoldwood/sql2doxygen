@@ -18,7 +18,7 @@
 struct MyTable
 {
 	/** This column definition uses the C-style comment. */
-	MyType MyColumn; 
+	myschema::MyType MyColumn; 
 
 	/* Non-Doxygen C-style comment. */
 	int CStyleComment; 
@@ -54,7 +54,7 @@ struct MyOtherTable
 
 struct MyFinalTable
 {
-	smalldatetime MyFinalColumn; 
+	varchar[10] MyFinalColumn; 
 };
 
 /**
@@ -71,8 +71,7 @@ struct dbo::BracketsTable
  * NB: The signature is written on a single line.
  */
 
-varchar[10] MyNoArgsFunction() 
-
+varchar[10] MyNoArgsFunction()
 {
 	return '42';
 }
@@ -81,10 +80,7 @@ varchar[10] MyNoArgsFunction()
  * A function that has a schema and []'s in the name.
  */
 
-BracketType dbo::BracketsFunction
-(
-)
-
+BracketType dbo::BracketsFunction()
 {
 	return '42';
 }
@@ -93,10 +89,7 @@ BracketType dbo::BracketsFunction
  * A function that takes no arguments and spans multiple lines.
  */
 
-varchar[20] MyOtherNoArgsFunction
-(
-)
-
+varchar[20] MyOtherNoArgsFunction()
 {
 	return '42';
 }
@@ -106,10 +99,7 @@ varchar[20] MyOtherNoArgsFunction
  * specified on a separate line.
  */
 
-varchar[20] OneMoreNoArgsFunction
-(
-)
-
+varchar[20] OneMoreNoArgsFunction()
 {
 	return '42';
 }
@@ -121,9 +111,8 @@ varchar[20] OneMoreNoArgsFunction
 varchar[10] MyFunction
 (
 	tinyint @value1 //!< The 1st argument.
-, 	smalldatetime @value2 /*!< The 2nd argument. */
+	,smalldatetime @value2 /*!< The 2nd argument. */
 )
-
 {
 	return
 	case @value
@@ -155,12 +144,13 @@ void dbo::BracketsProcedure
 }
 
 /*!
- * A procedure that takes no arguments.
+ * A procedure that takes arguments.
  */
 
-void MyOneArgProcedure
+void MyMultiArgProcedure
 (
-	varchar @anArgument //!< The procedures' sole argument
+	tinyint @value1 //!< The 1st argument.
+	,varchar[10] @value2 /*!< The 2nd argument. */
 )
 {
 	set nocount on;

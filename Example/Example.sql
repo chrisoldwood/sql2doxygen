@@ -59,7 +59,7 @@ go
 
 create table MyFinalTable
 (
-	MyFinalColumn smalldatetime
+	MyFinalColumn varchar(10)
 )
 go
 
@@ -169,12 +169,13 @@ as
 go
 
 /*!
- * A procedure that takes no arguments.
+ * A procedure that takes arguments.
  */
 
-create procedure MyOneArgProcedure
+create procedure MyMultiArgProcedure
 (
-	@anArgument varchar(10)		--!< The procedures' sole argument
+	@value1	tinyint,		--!< The 1st argument.
+	@value2	varchar(10)	/*!< The 2nd argument. */
 )
 as
 	set nocount on;
