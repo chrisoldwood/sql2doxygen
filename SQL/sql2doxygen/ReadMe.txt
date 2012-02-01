@@ -1,4 +1,4 @@
-sql2doxygen v0.1 [Alpha]
+sql2doxygen v0.2 [Alpha]
 ========================
 
 
@@ -23,4 +23,4 @@ Web:   http://www.cix.co.uk/~gort
 
 Chris Oldwood 
 
-24th June 2011
+31st January 2012

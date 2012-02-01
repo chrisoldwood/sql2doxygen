@@ -1,3 +1,13 @@
+Version 0.2 [Alpha]
+===================
+
+- Fixed wrapping of the output at 80 cols (a common PowerShell issue).
+- Added support for []'s in the object names.
+- Fixed the INPUT_FILTER example in the Usage.
+- Minor improvements to the parsing
+- Massive code refactoring by splitting it into functions and reusing regexes.
+
+
 Version 0.1 [Alpha]
 ===================
 
@@ -7,4 +17,4 @@ Version 0.1 [Alpha]
 Chris Oldwood 
 [gort@cix.co.uk]
 
-24th June 2011
+31st January 2012

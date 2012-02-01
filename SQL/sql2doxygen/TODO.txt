@@ -1,3 +1,7 @@
 - Transform create schema to namespace
 
 - Place objects inside namespaces to avoid "Internal inconsistency: scope for class..."
+
+- Namespace separator "::" for C++ or "." for C#/Java
+
+- Option to strip schema name from type on column defintion
