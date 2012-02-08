@@ -5,3 +5,9 @@
 - Namespace separator "::" for C++ or "." for C#/Java
 
 - Option to strip schema name from type on column defintion
+
+- Stored procedures should have a return type of int, not void
+
+- Stored procedure and function arguments can have a default value
+
+- Stored procedures arguments can be declared as "output"
