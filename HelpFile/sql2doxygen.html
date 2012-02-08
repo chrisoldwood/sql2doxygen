@@ -20,17 +20,18 @@ td		{ font-family: Verdana, Arial; font-size: 10pt; border: 1px solid black; ver
 <h4>Introduction</h4>
 
 <p>
-Doxygen is a tool for generating documentation from source code and it currently
-handles many languages either natively or through add-on filters. This script
-is one such filter that transforms T-SQL into C-like code so that doxygen can
-then parse it natively.
+<a href="http://www.doxygen.org">Doxygen </a>is a tool for generating documentation
+from source code and it currently handles many languages either natively or
+through add-on filters. This script is one such filter that transforms T-SQL
+into C-like code so that Doxygen can then parse it natively.
 </p><p>
 While this means that you can benefit from the automated generation of
 documentation it does mean that you have to mentally translate a 'struct' back
 into a 'table' and reverse the type and member/variable names in declarations.
 </p><p>
-NB: There is a separate project underway that is designed to allow Doxygen to
-natively handle SQL and format it in more natural fashion.
+There is a <a href="http://github.com/paulpster/sqlDoxygen">separate project
+underway</a> that is designed to allow Doxygen to natively handle SQL and format
+it in a fashion more suitable for SQL databases.
 </p>
 
 <a name="Installation"></a>
@@ -40,7 +41,7 @@ natively handle SQL and format it in more natural fashion.
 The only file you need from the package is <code>sql2doxygen.ps1</code>. Copy
 it to somewhere suitable such as your Doxygen installation or the SQL project.
 </p><p>
-In the doxygen configuration file for your project you'll find a section about
+In the Doxygen configuration file for your project you'll find a section about
 options for input files. Near the bottom of that section you'll find an entry
 called <code>INPUT_FILTER</code>, set this to where the <code>sql2doxygen.ps1</code>
 script lives.
@@ -53,7 +54,7 @@ INPUT        = .
 INPUT_FILTER = "PowerShell.exe -File C:\Path\To\sql2doxygen.ps1"
 . . .
 </pre><p>
-NB: The surrounding quotes are required or you'll get a cryptic error from
+The surrounding quotes are required or you'll get a cryptic error from
 Doxygen about not being able to find it.
 </p>
 
@@ -73,7 +74,7 @@ to see the results:-
 C:\sql2doxygen\Example> start Dox\index.html
 </pre><p>
 </p><p>
-NB: The example Doxygen.cfg file uses a relative path to reference the sql2doxygen
+The example Doxygen.cfg file uses a relative path to reference the sql2doxygen
 filter script and so you must ensure the current working directory (CWD) is set
 to the <code>Example</code> folder.
 </p>
@@ -82,7 +83,153 @@ to the <code>Example</code> folder.
 <h4>SQL Source Formatting</h4>
 
 <p>
-TODO... The example covers some of this in its introduction page.
+The filter is implemented as a very simple line-based parser and that means
+there are restrictions on how freely the SQL can be formatted. Basically each
+part of the declaration (table name, column, parameter, etc.) should be on a
+separate line. If you document your columns and parameters using the single-line
+comment style on the right hand side this will be natural anyway.
+</p>
+
+<h5>Comment Formats</h5>
+<p>
+T-SQL supports the C-style multi-line comment style <code>/* comment */</code>
+and its own single-line style <code>-- comment</code>. This means that the
+first style is already supported directly by Doxygen, whereas the second is
+easily translated into the C++ style <code>// comment</code>. Below are a few
+examples of Doxygen enabled SQL comments:-
+</p><pre>
+/**
+ * This is a multi-line comment.
+ */
+
+/** This is a comment on one line. */
+
+/*! This is an alternate C-style comment. */
+
+--! The is the SQL equivalent of a C++ single-line comment
+
+--- This is the alternate style of single-line comment
+
+definition_1    /*!< This comment is to the right */
+definition_2    --!< This comment is also to the right
+definition_3    ---< Another comment to the right
+</pre>
+<p>
+Non-Doxygen enabled comments (/* */ and --) are still supported and will
+be passed through the filter but ignored by Doxygen.
+</p>
+
+<h5>Identifier Format</h5>
+<p>
+The filter recognises identifiers surrounded by []'s and also detects the schema
+name if present. The schema will be translated into a namespace and any characters
+in the name unsupported by C will be stripped or replaced with an '_'.
+</p><pre>
+CREATE TABLE [staging].[Customer]
+</pre><p>
+Will be translated to:-
+</p><pre>
+struct staging::Customer
+</pre>
+
+<h5>Table Format</h5>
+<p>
+Tables are translated into C 'structs' with the columns being represented as
+fields (or members). The only aspects of the column definition that are passed
+through are the type and name; additional attributes and constraints are ignored.
+The following example uses comments that precede the columns:-
+</p><pre>
+/*!
+ * This table is an example.
+ */
+
+CREATE TABLE schema.MyTable
+(
+    /*! My first column */
+    Column_1 int not null primary key clustered,
+
+    --! My second column
+    Column_2 udt.MyType 
+);
+</pre><p>
+This example shows the use of comments to the right of the columns:-
+</p><pre>
+--!
+--! This table is also an example.
+--!
+
+CREATE TABLE schema.MyTable
+(
+    Column_1 int,          /*!< My first column */
+    Column_2 udt.MyType    --!< My second column
+);
+</pre><p>
+The body must be enclosed in parenthesis on separate lines but the trailing
+semi-colon is optional.
+</p>
+
+<h5>Stored Procedure Format</h5>
+<p>
+Stored procedures are transformed into C functions with the type and variable
+names switched around. Once again you can place the comment before or to the
+right of the argument, but they must be on separate lines. The body is denoted
+by the AS/GO pair which is transformed into a pair of curly braces.
+</p><pre>
+/*!
+ * A stored procedure that does stuff.
+ */
+
+CREATE PROCEDURE MyStoredProcedure
+(
+    @value1	tinyint,        --!< The 1st argument.
+    @value2	varchar(10)     /*!< The 2nd argument. */
+)
+AS
+    . . .
+GO
+</pre><p>
+The arguments must be enclosed in parenthesis and both the parenthesis and
+AS/GO body delimiters must be on separate lines.
+</p>
+
+<h5>Function Format</h5>
+<p>
+Functions are handled in much the same way as stored procedures, but with the
+addition of the return type. Due to the return type being specified after the
+argument list there are a few styles of function that can be used depending
+on whether the function takes zero or more arguments:-
+</p><pre>
+CREATE FUNCTION MyFunction() RETURNS tinyint
+AS
+    . . .
+GO
+
+CREATE FUNCTION MyFunction()
+    RETURNS tinyint
+AS
+    . . .
+GO
+
+CREATE FUNCTION MyFunction
+(
+)
+    RETURNS tinyint
+AS
+    . . .
+GO
+
+CREATE FUNCTION MyFunction
+(
+    @value1	tinyint,        --!< The 1st argument.
+    @value2	varchar(10)     /*!< The 2nd argument. */
+)
+    RETURNS tinyint
+AS
+    . . .
+GO
+</pre><p>
+As with stored procedures the arguments must be enclosed in parenthesis and both
+the parenthesis and AS/GO body delimiters must be on separate lines.
 </p>
 
 <hr>
@@ -104,7 +251,7 @@ Email: <a href="mailto://gort@cix.co.uk">gort@cix.co.uk</a><br>
 Web: <a href="http://www.cix.co.uk/~gort">www.cix.co.uk/~gort</a><br>
 </p><p>
 Chris Oldwood<br>
-31st January 2012<br>
+8th February 2012<br>
 </p>
 
 </body>
