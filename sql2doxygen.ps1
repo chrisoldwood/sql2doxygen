@@ -59,7 +59,9 @@ if ( ($args.count -ne 1) -or ($args[0] -eq '--help') )
 ################################################################################
 # Regular expressions used to parse the code.
 
+$namepart_pattern = '[\w\[\]]+'                             # [name]
 $name_pattern = '[\w.\[\]]+'                                # [schema].[name]
+$fullname_re = "(?<schema>$namepart_pattern).(?<name>$namepart_pattern)"	# name|schema.name
 $indent_re = '^(?<indent>\s*)'                              # Leading whitespace
 $column_name_re = "(?<column_name>$name_pattern)"           # Identifier
 $type_name_re = "(?<type_name>[\w.\[\]()]+)"                # Identifier
@@ -71,6 +73,8 @@ $create_function_re = 'create\s+function'                   # create function
 $function_name_re = "(?<function_name>$name_pattern)"       # Identifier
 $create_procedure_re = 'create\s+procedure'                 # create procedure
 $procedure_name_re = "(?<procedure_name>$name_pattern)"     # Identifier
+$create_type_re = 'create\s+type'                           # create type
+$alias_name_re = "(?<alias_name>$name_pattern)"             # Identifier
 
 ################################################################################
 # Detect a line consisting of nothing but whitespace.
@@ -83,6 +87,40 @@ function is-blank-line($line)
     }
 
     return $false
+}
+
+################################################################################
+# Parse the schema name from the SQL style identifier.
+
+function parse-schemaname($identifier)
+{
+	$schema = 'dbo'
+
+	if ( ($identifier -match '\.') -and ($identifier -match $fullname_re) )
+	{
+		$schema = $matches.schema
+	}
+
+    $schema = transform-identifier $schema
+    
+    return $schema
+}
+
+################################################################################
+# Parse the object name from the SQL style identifier.
+
+function parse-objectname($identifier)
+{
+	$object = $identifier
+
+	if ( ($identifier -match '\.') -and ($identifier -match $fullname_re) )
+	{
+		$object = $matches.name
+	}
+
+    $object = transform-identifier $object
+    
+    return $object
 }
 
 ################################################################################
@@ -210,7 +248,10 @@ function write-table-definition($enumerator)
         return
     }
     
-	$line = 'struct ' + (transform-identifier $matches.table_name)
+	$schema = parse-schemaname $matches.table_name
+	$name = parse-objectname $matches.table_name
+
+	$line = "struct $name"
 
 	write-line $line
 
@@ -223,10 +264,11 @@ function write-table-definition($enumerator)
 		{
 			$indent  = $matches.indent
 			$column  = transform-identifier $matches.column_name
-			$type    = transform-type $matches.type_name
+			$type_schema = parse-schemaname $matches.type_name
+			$type_name   = transform-type (parse-objectname $matches.type_name)
 			$comment = $matches.comment
 
-			$line = $indent + $type + ' ' + $column + '; ' + $comment
+			$line = $indent + $type_name + ' ' + $column + '; ' + $comment
 		}
 
         # Transform table body delimiters
@@ -260,10 +302,11 @@ function write-parameters($enumerator)
 		{
 			$indent  = $matches.indent
 			$param   = transform-identifier $matches.parameter_name
-			$type    = transform-type $matches.type_name
+			$type_schema = parse-schemaname $matches.type_name
+			$type_name   = transform-type (parse-objectname $matches.type_name)
 			$comment = transform-sql-comment $matches.comment
 
-			$line = $indent + $separator + $type + ' ' + $param + ' ' + $comment
+			$line = $indent + $separator + $type_name + ' ' + $param + ' ' + $comment
             
             if ($separator -eq '')
             {
@@ -315,7 +358,8 @@ function write-fn_or_proc-definition($enumerator, $fn_or_proc)
             return
         }
 
-        $name = transform-identifier $matches.function_name
+		$schema = parse-schemaname $matches.function_name
+		$name = parse-objectname $matches.function_name
 
         $returnType = ''
 
@@ -332,9 +376,10 @@ function write-fn_or_proc-definition($enumerator, $fn_or_proc)
             return
         }
 
-        $name = transform-identifier $matches.procedure_name
+		$schema = parse-schemaname $matches.procedure_name
+		$name = parse-objectname $matches.procedure_name
 
-        $returnType = 'void'
+        $returnType = 'int'
     }
 
     $argsList = $null
@@ -360,17 +405,15 @@ function write-fn_or_proc-definition($enumerator, $fn_or_proc)
 		{
             if ($argsList -eq $null)
             {
-                write-line ($returnType + ' ' + $name + '()')
+                write-line ($returnType + ' ' + "$name" + '();')
             }
             else
             {
-                write-line ($returnType + ' ' + $name)
+                write-line ($returnType + ' ' + "$name")
                 write-line '('
                 $argsList | foreach { write-line $_ }
-                write-line ')'
+                write-line ');'
             }
-
-			write-line '{'
         }
         # Handle argument list
 		elseif ($line -match '^\($')
@@ -386,11 +429,6 @@ function write-fn_or_proc-definition($enumerator, $fn_or_proc)
 		{
 			$returnType = transform-type $matches.type_name
 		}
-        # Buffer until return type seen
-		elseif ($returnType -ne '')
-		{
-			write-line $line
-		}
 
         # End of definition?
 		if ($line -match '}')
@@ -398,6 +436,34 @@ function write-fn_or_proc-definition($enumerator, $fn_or_proc)
 			return
 		}
 	}
+}
+
+################################################################################
+# Handle user-defined type definitions.
+
+function is-type-definition($line)
+{
+    if ($line -match "$indent_re$create_type_re")
+    {
+		return $true
+    }
+
+    return $false
+}
+
+function write-type-definition($enumerator)
+{
+	if ($line -notmatch "$indent_re$create_type_re\s+$alias_name_re\s+from\s+$type_name_re")
+    {
+        return
+    }
+
+	$alias_schema = parse-schemaname $matches.alias_name
+	$alias_name   = transform-type (parse-objectname $matches.alias_name)
+	$type_schema = parse-schemaname $matches.type_name
+	$type_name   = transform-type (parse-objectname $matches.type_name)
+
+	write-line "typedef $type_name $alias_name;"
 }
 
 ################################################################################
@@ -433,5 +499,9 @@ while ($enumerator.movenext())
     elseif (is-procedure-definition $line -eq $true)
     {
         write-fn_or_proc-definition $(get-variable -name enumerator) $procedure
+    }
+    elseif (is-type-definition $line -eq $true)
+    {
+        write-type-definition $(get-variable -name enumerator)
     }
 }

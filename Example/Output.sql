@@ -18,7 +18,7 @@
 struct MyTable
 {
 	/** This column definition uses the C-style comment. */
-	myschema::MyType MyColumn; 
+	MyType MyColumn; 
 
 	/* Non-Doxygen C-style comment. */
 	int CStyleComment; 
@@ -61,7 +61,7 @@ struct MyFinalTable
 ** A table definition that has a schema and []'s in the names.
 **/
 
-struct dbo::BracketsTable
+struct BracketsTable
 {
 	BracketsType BracketsColumn; //!< A column with []'s in the name.
 };
@@ -71,38 +71,32 @@ struct dbo::BracketsTable
  * NB: The signature is written on a single line.
  */
 
-varchar[10] MyNoArgsFunction()
-{
-	return '42';
-}
+varchar[10] MyNoArgsFunction();
+
+/*!
+ * A user defined type.
+ */
+
+typedef varchar[100] BracketType;
 
 /*!
  * A function that has a schema and []'s in the name.
  */
 
-BracketType dbo::BracketsFunction()
-{
-	return '42';
-}
+BracketType BracketsFunction();
 
 /*!
  * A function that takes no arguments and spans multiple lines.
  */
 
-varchar[20] MyOtherNoArgsFunction()
-{
-	return '42';
-}
+varchar[20] MyOtherNoArgsFunction();
 
 /*!
  * A function that takes no arguments where the return is
  * specified on a separate line.
  */
 
-varchar[20] OneMoreNoArgsFunction()
-{
-	return '42';
-}
+varchar[20] OneMoreNoArgsFunction();
 
 /*!
  * A function that takes one or more arguments.
@@ -112,46 +106,29 @@ varchar[10] MyFunction
 (
 	tinyint @value1 //!< The 1st argument.
 	,smalldatetime @value2 /*!< The 2nd argument. */
-)
-{
-	return
-	case @value
-		when 4 then	'4'
-		when 2 then	'2'
-		else		'42'
-	end
-}
+);
 
 /*!
  * A procedure that takes no arguments.
  */
 
-void MyNoArgProcedure()
-{
-	set nocount on;
-}
+int MyNoArgProcedure();
 
 /*!
  * A procedure that has a schema and []'s in the name.
  */
 
-void dbo::BracketsProcedure
+int BracketsProcedure
 (
 	BracketType @aParam //!< Parameter type with []'s
-)
-{
-	set nocount on;
-}
+);
 
 /*!
  * A procedure that takes arguments.
  */
 
-void MyMultiArgProcedure
+int MyMultiArgProcedure
 (
 	tinyint @value1 //!< The 1st argument.
 	,varchar[10] @value2 /*!< The 2nd argument. */
-)
-{
-	set nocount on;
-}
+);

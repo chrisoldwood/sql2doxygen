@@ -86,6 +86,13 @@ end
 go
 
 /*!
+ * A user defined type.
+ */
+
+create type BracketType from varchar(100)
+go
+
+/*!
  * A function that has a schema and []'s in the name.
  */
 
