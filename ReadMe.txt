@@ -1,26 +1,28 @@
 sql2doxygen v0.2 [Alpha]
 ========================
 
+Introduction
+------------
 
-1: Installation
----------------
+Doxygen is a tool for generating documentation from source code and it
+currently handles many languages either natively or through add-on filters.
+This script is one such filter that transforms T-SQL into C-like code so that
+Doxygen can then parse it natively. 
 
-Copy the files sql2doxygen.* to a suitable location.
+While this means that you can benefit from the automated generation of
+documentation it does mean that you have to mentally translate a 'struct' back
+into a 'table' and reverse the type and member/variable names in declarations.
 
+Documentation
+-------------
 
-2: Help/Manual
---------------
+There is a manual: sql2doxygen.html.
 
-There is a HelpFile - sql2doxygen.html.
-
-
-3: Contact Details
+Contact Details
 ------------------
 
 Email: gort@cix.co.uk
-Web:   http://www.cix.co.uk/~gort
-
+Web:   http://www.chrisoldwood.com
 
 Chris Oldwood 
-
 31st January 2012
