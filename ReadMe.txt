@@ -13,6 +13,15 @@ While this means that you can benefit from the automated generation of
 documentation it does mean that you have to mentally translate a 'struct' back
 into a 'table' and reverse the type and member/variable names in declarations.
 
+Releases
+--------
+
+Stable releases are formally packaged and made available from my SQL tools page:
+http://www.chrisoldwood.com/sql.htm
+
+The latest code is available from my GitHub repo:
+https://github.com/chrisoldwood/sql2doxygen
+
 Documentation
 -------------
 
