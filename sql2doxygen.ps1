@@ -1,7 +1,7 @@
 ################################################################################
 # \file		sql2doxygen.ps1
 # \brief	Convert the SQL file into something Doxygen can handle.
-# \author	Chris Oldwood (gort@cix.co.uk | www.cix.co.uk/~gort)
+# \author	Chris Oldwood (gort@cix.co.uk | www.chrisoldwood.com)
 # \version	0.2
 #
 # This is a Doxygen filter that takes a .SQL file (T-SQL) and transforms it into
